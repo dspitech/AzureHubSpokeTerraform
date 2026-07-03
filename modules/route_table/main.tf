@@ -17,7 +17,6 @@ resource "azurerm_route" "this" {
 }
 
 resource "azurerm_subnet_route_table_association" "this" {
-  count          = var.subnet_id != null ? 1 : 0
   subnet_id      = var.subnet_id
   route_table_id = azurerm_route_table.this.id
 }
