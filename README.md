@@ -19,7 +19,7 @@ Projet : `AZ-PRO-HUB-SPOKE-NORWAY` · Région : `norwayeast` · Environnement de
 Déploiement automatisé et 100 % reproductible d'une architecture réseau **Hub & Spoke** sécurisée sur Microsoft Azure, entièrement modularisée en Terraform.
 
 ---
-
+ 
 ## Sommaire
 
 - [Aperçu du projet](#aperçu-du-projet)
