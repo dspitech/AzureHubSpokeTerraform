@@ -1,11 +1,33 @@
-# Azure Hub & Spoke Sécurisée — Déploiement Terraform
+# Azure : Hub & Spoke Sécurisée
 
-Portage du déploiement Azure CLI/PowerShell original vers une infrastructure
-Terraform modulaire. Même architecture, même adressage, même logique de
-sécurité (Firewall central, Bastion, UDR forçant le trafic inter-spoke via
-le Firewall), mais 100% déclaratif, idempotent et versionnable.
+![Azure](https://img.shields.io/badge/Cloud-Microsoft%20Azure-0089D6?style=flat&logo=microsoftazure)
+![Windows Server](https://img.shields.io/badge/OS-Windows_Server_2022-0078D4?style=flat&logo=windows)
+![Bastion](https://img.shields.io/badge/Security-Azure_Bastion-0078D4?style=flat)
+![Azure Firewall](https://img.shields.io/badge/Security-Azure_Firewall-0C6F82?style=flat&logo=firewall)
+![VNet Peering](https://img.shields.io/badge/Network-VNet_Peering-0078D4?style=flat&logo=azure)
+![Terraform](https://img.shields.io/badge/Terraform-7B42BC?style=for-the-badge&logo=terraform&logoColor=white)
+![Ubuntu](https://img.shields.io/badge/Ubuntu_22.04-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)
+![Security](https://img.shields.io/badge/Pentest-Ready-brightgreen?style=for-the-badge&logo=kalilinux&logoColor=white)
 
-## Architecture
+## Projet : AZ-PRO-HUB-SPOKE-NORWAY
+
+### Environnement : Cloud Shell
+
+### Région : norwayeast
+
+### Auteur : LO Pape (pape.lo@estiam.com)
+
+### Date : Décembre 2025
+
+---
+
+## Architecture du projet
+
+<img width="1381" height="792" alt="image" src="https://github.com/user-attachments/assets/596470c6-debd-4374-b7fe-9a3f9787fc8f" />
+
+
+Cette architecture utilise un **VNet Hub** comme point central de sécurité et deux **VNets Spokes** pour les ressources applicatives.
+
 
 - **VnetHub** (10.0.0.0/16) : AzureFirewallSubnet, AzureBastionSubnet, Prod
 - **VnetSpoke1** (192.168.0.0/24) : Prod (VM-SPOKE-1)
@@ -65,7 +87,7 @@ cd terraform-hub-spoke
 terraform init
 
 # 2. Définir le mot de passe admin SANS le committer
-export TF_VAR_admin_password="VotreMotDePasseComplexe!2025"
+admin_password = "VotreMotDePasseComplexe!2025"
 
 # 3. (Optionnel) copier et adapter le fichier de variables
 cp terraform.tfvars.example terraform.tfvars
