@@ -9,9 +9,9 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)
 ![Security](https://img.shields.io/badge/Cybersecurity-Hardened-success?style=for-the-badge&logo=shield&logoColor=white)
 
-## Auteur
+## Auteur 
 
-**LO Pape** — [pape.lo@estiam.com](mailto:pape.lo@estiam.com)
+**LO Pape** - [pape.lo@estiam.com](mailto:pape.lo@estiam.com)
 
 Projet : `AZ-PRO-HUB-SPOKE-NORWAY` · Région : `norwayeast` · Environnement de développement : Cloud Shell
 
@@ -48,7 +48,7 @@ Déploiement automatisé et 100 % reproductible d'une architecture réseau **Hub
 
 ## Aperçu du projet
 
-Ce projet déploie, via **Terraform**, une architecture réseau Azure de type **Hub & Spoke** — un modèle de référence largement adopté en entreprise pour centraliser la sécurité et la gouvernance réseau tout en isolant les charges applicatives.
+Ce projet déploie, via **Terraform**, une architecture réseau Azure de type **Hub & Spoke** - un modèle de référence largement adopté en entreprise pour centraliser la sécurité et la gouvernance réseau tout en isolant les charges applicatives.
 
 Un **VNet Hub** central héberge les services de sécurité partagés (pare-feu, bastion), tandis que deux **VNets Spoke** hébergent chacun une charge de travail applicative (une VM Windows Server). Tout le trafic entre les Spokes est **forcé de transiter par le Firewall central** grâce à des tables de routage définies par l'utilisateur (UDR), et l'accès administratif aux VMs se fait exclusivement via **Azure Bastion**, sans aucune IP publique exposée sur les machines virtuelles.
 
@@ -69,12 +69,12 @@ Un **VNet Hub** central héberge les services de sécurité partagés (pare-feu,
 
 L'architecture repose sur un **VNet Hub** central connecté à deux **VNets Spoke** par peering VNet bidirectionnel. Le Hub concentre les composants de sécurité et d'administration partagés par l'ensemble de la plateforme.
 
-- **VnetHub** (`10.0.0.0/16`) — contient :
+- **VnetHub** (`10.0.0.0/16`) - contient :
   - `AzureFirewallSubnet` → Azure Firewall (inspection et filtrage du trafic inter-Spoke)
   - `AzureBastionSubnet` → Azure Bastion (point d'accès administratif unique)
   - `Prod` → réservé à de futures ressources centrales
-- **VnetSpoke1** (`192.168.0.0/24`) — sous-réseau `Prod` hébergeant `VM-SPOKE-1`
-- **VnetSpoke2** (`172.16.0.0/24`) — sous-réseau `Prod` hébergeant `VM-SPOKE-2`
+- **VnetSpoke1** (`192.168.0.0/24`) - sous-réseau `Prod` hébergeant `VM-SPOKE-1`
+- **VnetSpoke2** (`172.16.0.0/24`) - sous-réseau `Prod` hébergeant `VM-SPOKE-2`
 
 Le trafic entre Spoke1 et Spoke2 ne passe **jamais directement** par le peering : des routes définies par l'utilisateur (UDR) forcent ce trafic à transiter par l'IP privée de l'Azure Firewall, qui applique ensuite ses règles de filtrage réseau avant de router le paquet vers sa destination.
 
@@ -82,21 +82,21 @@ Le trafic entre Spoke1 et Spoke2 ne passe **jamais directement** par le peering 
 
 ```mermaid
 flowchart TB
-    subgraph HUB["VNet Hub — 10.0.0.0/16"]
-        FW["Azure Firewall<br/>AzureFirewallSubnet — 10.0.2.0/24"]
-        BAS["Azure Bastion<br/>AzureBastionSubnet — 10.0.4.0/24"]
+    subgraph HUB["VNet Hub - 10.0.0.0/16"]
+        FW["Azure Firewall<br/>AzureFirewallSubnet - 10.0.2.0/24"]
+        BAS["Azure Bastion<br/>AzureBastionSubnet - 10.0.4.0/24"]
         PIP1[["IP publique Firewall"]]
         PIP2[["IP publique Bastion"]]
         FW --- PIP1
         BAS --- PIP2
     end
 
-    subgraph SPOKE1["VNet Spoke1 — 192.168.0.0/24"]
+    subgraph SPOKE1["VNet Spoke1 - 192.168.0.0/24"]
         VM1["VM-SPOKE-1<br/>Windows Server 2022<br/>(pas d'IP publique)"]
         UDR1["UDR Spoke1<br/>route vers Spoke2 → Firewall"]
     end
 
-    subgraph SPOKE2["VNet Spoke2 — 172.16.0.0/24"]
+    subgraph SPOKE2["VNet Spoke2 - 172.16.0.0/24"]
         VM2["VM-SPOKE-2<br/>Windows Server 2022<br/>(pas d'IP publique)"]
         UDR2["UDR Spoke2<br/>route vers Spoke1 → Firewall"]
     end
@@ -122,9 +122,9 @@ flowchart TB
 | VM-SPOKE-1 → VM-SPOKE-2 | Peering Spoke1↔Hub → UDR → Azure Firewall → Peering Hub↔Spoke2 | Règle réseau `Spoke1-to-Spoke2-Ping` (ICMP) sur le Firewall |
 | VM-SPOKE-2 → VM-SPOKE-1 | Peering Spoke2↔Hub → UDR → Azure Firewall → Peering Hub↔Spoke1 | Règle réseau `Spoke2-to-Spoke1-Ping` (ICMP) sur le Firewall |
 | VM → Internet | Sortie via SNAT du Firewall (IP publique associée) | Filtrage centralisé, traçable |
-| Trafic entrant non sollicité | — | Bloqué : NSG sur chaque subnet `Prod`, aucune IP publique exposée |
+| Trafic entrant non sollicité | - | Bloqué : NSG sur chaque subnet `Prod`, aucune IP publique exposée |
 
-Chaque subnet `Prod` (Spoke1 et Spoke2) est également protégé par un **Network Security Group** dédié, qui n'autorise explicitement que le trafic ICMP entrant nécessaire aux tests de connectivité — tout le reste est implicitement refusé par les règles par défaut d'Azure.
+Chaque subnet `Prod` (Spoke1 et Spoke2) est également protégé par un **Network Security Group** dédié, qui n'autorise explicitement que le trafic ICMP entrant nécessaire aux tests de connectivité - tout le reste est implicitement refusé par les règles par défaut d'Azure.
 
 ---
 
@@ -199,7 +199,7 @@ Le projet suit une architecture **100 % modulaire** : chaque brique Azure (rése
 3. **Network Security Groups** et association aux subnets `Prod`
 4. **Machines virtuelles** (dépendent des NSG via `depends_on`)
 5. **Azure Firewall** et règles de filtrage inter-Spoke
-6. **Tables de routage (UDR)** — le next-hop est calculé automatiquement à partir de l'IP privée du Firewall (`module.firewall.private_ip_address`)
+6. **Tables de routage (UDR)** - le next-hop est calculé automatiquement à partir de l'IP privée du Firewall (`module.firewall.private_ip_address`)
 7. **Peering VNet** Hub↔Spoke1 et Hub↔Spoke2 (bidirectionnel, `allow_forwarded_traffic = true`)
 8. **Azure Bastion**
 
@@ -230,7 +230,7 @@ Ces variables sont définies dans `variables.tf` à la racine et peuvent être s
 | `resource_group_name` | `string` | `RG-HUB-SPOKE-PROJECT` | Nom du groupe de ressources |
 | `location` | `string` | `norwayeast` | Région Azure de déploiement |
 | `admin_username` | `string` | `azure_admin` | Identifiant administrateur des VMs |
-| `admin_password` | `string` *(sensible)* | — *(obligatoire)* | Mot de passe administrateur des VMs |
+| `admin_password` | `string` *(sensible)* | - *(obligatoire)* | Mot de passe administrateur des VMs |
 | `vm_size` | `string` | `Standard_B2s` | Taille des machines virtuelles |
 | `firewall_sku_tier` | `string` | `Standard` | Tier du SKU Azure Firewall (`Standard`, `Premium` ou `Basic`) |
 | `hub_address_space` | `list(string)` | `["10.0.0.0/16"]` | Plage d'adresses du VNet Hub |
@@ -268,7 +268,7 @@ terraform output -json
 ## Prérequis
 
 - [Terraform](https://developer.hashicorp.com/terraform/downloads) ≥ 1.6.0
-- [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) installée et authentifiée (`az login`) — Terraform réutilise cette session
+- [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) installée et authentifiée (`az login`) - Terraform réutilise cette session
 - Un abonnement Azure actif avec un rôle **Contributor** (ou équivalent) sur le scope cible
 - Le provider `azurerm` (`~> 3.100`), téléchargé automatiquement par `terraform init`
 
@@ -345,7 +345,7 @@ Le ping doit aboutir : le trafic transite par le Firewall (visible dans **Azure 
 terraform destroy -auto-approve
 ```
 
-Cette commande supprime uniquement les ressources gérées par Terraform et met à jour le state en conséquence — contrairement à une suppression manuelle du groupe de ressources, elle garantit la cohérence entre l'infrastructure réelle et l'état Terraform.
+Cette commande supprime uniquement les ressources gérées par Terraform et met à jour le state en conséquence - contrairement à une suppression manuelle du groupe de ressources, elle garantit la cohérence entre l'infrastructure réelle et l'état Terraform.
 
 ---
 
@@ -353,9 +353,9 @@ Cette commande supprime uniquement les ressources gérées par Terraform et met 
 
 - **Ne jamais committer** `terraform.tfvars` ni `*.tfstate` : le state Terraform contient le mot de passe VM en clair. Ces fichiers sont déjà exclus par `.gitignore`.
 - Préférer une **variable d'environnement** (`TF_VAR_admin_password`) ou un secret manager plutôt qu'un fichier tfvars pour le mot de passe.
-- Pour un usage au-delà d'un lab, stocker le state dans un **backend distant chiffré** (`azurerm` backend sur un Storage Account) — le bloc est déjà présent, commenté, dans `providers.tf`.
+- Pour un usage au-delà d'un lab, stocker le state dans un **backend distant chiffré** (`azurerm` backend sur un Storage Account) - le bloc est déjà présent, commenté, dans `providers.tf`.
 - Envisager de générer le mot de passe avec la ressource `random_password` et de le stocker dans **Azure Key Vault** plutôt que de le passer en variable brute.
-- Les VMs n'ayant aucune IP publique, la surface d'attaque exposée à Internet se limite aux IP publiques du Firewall et du Bastion — toutes deux protégées par les contrôles natifs de ces services managés.
+- Les VMs n'ayant aucune IP publique, la surface d'attaque exposée à Internet se limite aux IP publiques du Firewall et du Bastion - toutes deux protégées par les contrôles natifs de ces services managés.
 - Envisager l'activation de **Microsoft Defender for Cloud** pour un monitoring de sécurité continu sur l'ensemble de l'abonnement.
 
 ---
@@ -417,7 +417,7 @@ Pensez à exécuter `terraform destroy` en dehors des périodes d'utilisation (l
 
 ## Licence
 
-Ce projet est distribué sous licence **MIT** — voir le fichier [`LICENSE`](./LICENSE) pour le texte complet.
+Ce projet est distribué sous licence **MIT** - voir le fichier [`LICENSE`](./LICENSE) pour le texte complet.
 
 ---
 
