@@ -1,0 +1,16 @@
+# State Terraform (contient des secrets en clair)
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Fichiers de variables contenant des secrets
+terraform.tfvars
+*.auto.tfvars
+
+# Divers
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

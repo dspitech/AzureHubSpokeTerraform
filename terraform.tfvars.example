@@ -1,0 +1,19 @@
+# Copier ce fichier en "terraform.tfvars" et l'adapter.
+# NE JAMAIS committer terraform.tfvars ou tout fichier contenant un mot de passe réel.
+
+resource_group_name = "RG-HUB-SPOKE-PROJECT"
+location             = "norwayeast"
+admin_username        = "azure_admin"
+
+# Recommandé : NE PAS mettre le mot de passe ici.
+# Utiliser plutôt une variable d'environnement avant le apply :
+#   export TF_VAR_admin_password="VotreMotDePasseComplexe!2025"
+# admin_password      = "A_NE_PAS_COMMITTER"
+
+vm_size = "Standard_B2s"
+
+tags = {
+  projet      = "AZ-PRO-HUB-SPOKE-NORWAY"
+  environment = "lab"
+  gere_par    = "terraform"
+}
