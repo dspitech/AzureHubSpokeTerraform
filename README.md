@@ -1,13 +1,15 @@
 # Azure : Hub & Spoke Sécurisée
 
-![Azure](https://img.shields.io/badge/Cloud-Microsoft%20Azure-0089D6?style=flat&logo=microsoftazure)
-![Windows Server](https://img.shields.io/badge/OS-Windows_Server_2022-0078D4?style=flat&logo=windows)
-![Bastion](https://img.shields.io/badge/Security-Azure_Bastion-0078D4?style=flat)
-![Azure Firewall](https://img.shields.io/badge/Security-Azure_Firewall-0C6F82?style=flat&logo=firewall)
-![VNet Peering](https://img.shields.io/badge/Network-VNet_Peering-0078D4?style=flat&logo=azure)
-![Terraform](https://img.shields.io/badge/Terraform-7B42BC?style=for-the-badge&logo=terraform&logoColor=white)
-![Ubuntu](https://img.shields.io/badge/Ubuntu_22.04-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)
-![Security](https://img.shields.io/badge/Pentest-Ready-brightgreen?style=for-the-badge&logo=kalilinux&logoColor=white)
+![Microsoft Azure](https://img.shields.io/badge/Microsoft%20Azure-Cloud-0078D4?style=for-the-badge&logo=microsoftazure&logoColor=white)
+![Windows Server 2022](https://img.shields.io/badge/Windows%20Server-2022-0078D4?style=for-the-badge&logo=windows&logoColor=white)
+![Azure Bastion](https://img.shields.io/badge/Azure-Bastion-0089D6?style=for-the-badge&logo=microsoftazure&logoColor=white)
+![Azure Firewall](https://img.shields.io/badge/Azure-Firewall-0C6F82?style=for-the-badge&logo=microsoftazure&logoColor=white)
+![VNet Peering](https://img.shields.io/badge/Azure-VNet%20Peering-0078D4?style=for-the-badge&logo=microsoftazure&logoColor=white)
+![Terraform](https://img.shields.io/badge/Terraform-IaC-7B42BC?style=for-the-badge&logo=terraform&logoColor=white)
+![Ubuntu Server](https://img.shields.io/badge/Ubuntu-22.04%20LTS-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)
+![PowerShell](https://img.shields.io/badge/PowerShell-Automation-5391FE?style=for-the-badge&logo=powershell&logoColor=white)
+![GitHub Actions](https://img.shields.io/badge/GitHub-Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)
+![Security](https://img.shields.io/badge/Cybersecurity-Hardened-success?style=for-the-badge&logo=shield&logoColor=white)
 
 ## Projet : AZ-PRO-HUB-SPOKE-NORWAY
 
