@@ -14,3 +14,7 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+
+# Outils CI (TFLint / Checkov)
+.tflint.d/
+.checkov_report*

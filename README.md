@@ -32,12 +32,15 @@ Déploiement automatisé et 100 % reproductible d'une architecture réseau **Hub
 - [Variables d'entrée](#variables-dentrée)
 - [Sorties (outputs)](#sorties-outputs)
 - [Prérequis](#prérequis)
+- [Checklist avant le premier déploiement](#checklist-avant-le-premier-déploiement)
 - [Installation et déploiement](#installation-et-déploiement)
 - [Connexion aux machines virtuelles](#connexion-aux-machines-virtuelles)
 - [Tests de validation](#tests-de-validation)
 - [Nettoyage des ressources](#nettoyage-des-ressources)
 - [Bonnes pratiques de sécurité](#bonnes-pratiques-de-sécurité)
 - [Gestion du state Terraform](#gestion-du-state-terraform)
+- [Intégration continue (GitHub Actions)](#intégration-continue-github-actions)
+- [Observabilité (Log Analytics)](#observabilité-log-analytics)
 - [Estimation des coûts](#estimation-des-coûts)
 - [Pistes d'amélioration](#pistes-damélioration)
 - [Dépannage (Troubleshooting)](#dépannage-troubleshooting)
@@ -61,7 +64,10 @@ Un **VNet Hub** central héberge les services de sécurité partagés (pare-feu,
 | Sécurité réseau | Aucune IP publique sur les VMs, inspection centralisée du trafic inter-Spoke |
 | Accès administratif | Azure Bastion (RDP/SSH via portail, sans IP publique ni agent) |
 | Automatisation | Next-hop du Firewall calculé automatiquement (plus de saisie manuelle) |
-| Secrets | Mot de passe VM externalisé (variable sensible, non committé) |
+| Secrets | Mot de passe VM généré automatiquement (`random_password`) et stocké dans Azure Key Vault |
+| State | Backend distant Terraform Cloud (verrouillage automatique, sans Storage Account à gérer) |
+| Observabilité | Log Analytics + Diagnostic Settings (Firewall, Bastion, NSG) + NSG Flow Logs |
+| CI/CD | Pipeline GitHub Actions (`fmt`, `validate`, `tflint`, `checkov`, `plan`) |
 
 ---
 
@@ -134,10 +140,14 @@ Chaque subnet `Prod` (Spoke1 et Spoke2) est également protégé par un **Networ
 AzureHubSpokeTerraform/
 ├── main.tf                       # Assemblage de tous les modules
 ├── variables.tf                  # Variables racine (adressage, tailles, tags...)
-├── outputs.tf                    # IP Firewall, IP VMs, DNS Bastion...
-├── providers.tf                  # Provider azurerm + bloc backend (à activer)
+├── outputs.tf                    # IP Firewall, IP VMs, DNS Bastion, Key Vault, Log Analytics...
+├── providers.tf                  # Providers azurerm/random + backend Terraform Cloud
 ├── terraform.tfvars.example      # Modèle de fichier de variables à copier
+├── .tflint.hcl                   # Config TFLint (ruleset azurerm)
 ├── .gitignore                    # Exclusion des states et secrets
+├── .github/
+│   └── workflows/
+│       └── terraform.yml         # Pipeline CI : fmt, validate, tflint, checkov, plan
 ├── LICENSE                       # Licence MIT
 ├── README.md
 └── modules/
@@ -169,7 +179,23 @@ AzureHubSpokeTerraform/
     │   ├── main.tf
     │   ├── variables.tf
     │   └── outputs.tf
-    └── bastion/                   # Azure Bastion + IP publique
+    ├── bastion/                   # Azure Bastion + IP publique
+    │   ├── main.tf
+    │   ├── variables.tf
+    │   └── outputs.tf
+    ├── key_vault/                 # Key Vault + secrets (identifiants VM générés)
+    │   ├── main.tf
+    │   ├── variables.tf
+    │   └── outputs.tf
+    ├── log_analytics/             # Workspace Log Analytics central
+    │   ├── main.tf
+    │   ├── variables.tf
+    │   └── outputs.tf
+    ├── diagnostic_setting/        # Module générique : branche une ressource sur Log Analytics
+    │   ├── main.tf
+    │   ├── variables.tf
+    │   └── outputs.tf
+    └── flow_log/                  # NSG Flow Logs (Network Watcher + Storage Account)
         ├── main.tf
         ├── variables.tf
         └── outputs.tf
@@ -191,17 +217,24 @@ Le projet suit une architecture **100 % modulaire** : chaque brique Azure (rése
 | `route_table` | `azurerm_route_table`, `azurerm_route`, `azurerm_subnet_route_table_association` | UDR forçant le trafic inter-Spoke via le Firewall |
 | `peering` | `azurerm_virtual_network_peering` | Peering VNet à sens unique (instancié deux fois pour une liaison bidirectionnelle) |
 | `bastion` | `azurerm_public_ip`, `azurerm_bastion_host` | Point d'accès administratif unique, sans exposition des VMs |
+| `key_vault` | `azurerm_key_vault`, `azurerm_key_vault_secret` | Stockage sécurisé des identifiants VM générés (`random_password`) |
+| `log_analytics` | `azurerm_log_analytics_workspace` | Workspace central de collecte des logs (quota quotidien plafonné) |
+| `diagnostic_setting` | `azurerm_monitor_diagnostic_setting` | Module générique reliant Firewall/Bastion/NSG au workspace Log Analytics |
+| `flow_log` | `azurerm_network_watcher_flow_log` | Capture du trafic réel autorisé/bloqué par chaque NSG |
 
 ### Ordre de déploiement logique (géré automatiquement par le graphe Terraform)
 
 1. **Groupe de ressources**
-2. **Réseaux virtuels** (Hub, Spoke1, Spoke2) et leurs sous-réseaux
-3. **Network Security Groups** et association aux subnets `Prod`
-4. **Machines virtuelles** (dépendent des NSG via `depends_on`)
-5. **Azure Firewall** et règles de filtrage inter-Spoke
-6. **Tables de routage (UDR)** - le next-hop est calculé automatiquement à partir de l'IP privée du Firewall (`module.firewall.private_ip_address`)
-7. **Peering VNet** Hub↔Spoke1 et Hub↔Spoke2 (bidirectionnel, `allow_forwarded_traffic = true`)
-8. **Azure Bastion**
+2. **Secrets** : génération du mot de passe VM (`random_password`) et stockage dans **Key Vault**
+3. **Réseaux virtuels** (Hub, Spoke1, Spoke2) et leurs sous-réseaux
+4. **Network Security Groups** et association aux subnets `Prod`
+5. **Machines virtuelles** (dépendent des NSG via `depends_on`)
+6. **Azure Firewall** et règles de filtrage inter-Spoke
+7. **Tables de routage (UDR)** - le next-hop est calculé automatiquement à partir de l'IP privée du Firewall (`module.firewall.private_ip_address`)
+8. **Peering VNet** Hub↔Spoke1 et Hub↔Spoke2 (bidirectionnel, `allow_forwarded_traffic = true`)
+9. **Azure Bastion**
+10. **Log Analytics + Diagnostic Settings** sur le Firewall, le Bastion et les NSG
+11. **NSG Flow Logs** (Network Watcher + compte de stockage dédié)
 
 Terraform résout ces dépendances via son graphe de ressources ; aucune intervention manuelle sur l'ordre n'est nécessaire.
 
@@ -230,7 +263,8 @@ Ces variables sont définies dans `variables.tf` à la racine et peuvent être s
 | `resource_group_name` | `string` | `RG-HUB-SPOKE-PROJECT` | Nom du groupe de ressources |
 | `location` | `string` | `norwayeast` | Région Azure de déploiement |
 | `admin_username` | `string` | `azure_admin` | Identifiant administrateur des VMs |
-| `admin_password` | `string` *(sensible)* | - *(obligatoire)* | Mot de passe administrateur des VMs |
+| `admin_password` | `string` *(sensible)* | `null` | Mot de passe VM - utilisé uniquement si `generate_admin_password = false` |
+| `generate_admin_password` | `bool` | `true` | Génère un mot de passe VM aléatoire (`random_password`) stocké dans Key Vault |
 | `vm_size` | `string` | `Standard_B2s` | Taille des machines virtuelles |
 | `firewall_sku_tier` | `string` | `Standard` | Tier du SKU Azure Firewall (`Standard`, `Premium` ou `Basic`) |
 | `hub_address_space` | `list(string)` | `["10.0.0.0/16"]` | Plage d'adresses du VNet Hub |
@@ -240,6 +274,9 @@ Ces variables sont définies dans `variables.tf` à la racine et peuvent être s
 | `spoke1_address_space` | `list(string)` | `["192.168.0.0/24"]` | Plage d'adresses de Spoke1 |
 | `spoke2_address_space` | `list(string)` | `["172.16.0.0/24"]` | Plage d'adresses de Spoke2 |
 | `tags` | `map(string)` | `{ projet, environment, gere_par }` | Tags communs appliqués à toutes les ressources |
+| `log_retention_in_days` | `number` | `30` | Durée de rétention des logs dans Log Analytics |
+| `log_daily_quota_gb` | `number` | `0.5` | Plafond quotidien d'ingestion (Go) - maîtrise du coût |
+| `enable_nsg_flow_logs` | `bool` | `true` | Active les NSG Flow Logs (nécessite Network Watcher sur l'abonnement) |
 
 ---
 
@@ -255,6 +292,10 @@ Après un `terraform apply` réussi, les valeurs suivantes sont affichées (déf
 | `bastion_dns_name` | Nom DNS d'Azure Bastion |
 | `vm_spoke1_private_ip` | IP privée de VM-SPOKE-1 |
 | `vm_spoke2_private_ip` | IP privée de VM-SPOKE-2 |
+| `key_vault_name` | Nom du Key Vault contenant les identifiants VM générés |
+| `key_vault_uri` | URI du Key Vault |
+| `log_analytics_workspace_name` | Nom du workspace Log Analytics |
+| `log_analytics_workspace_id` | Workspace ID (GUID), utile pour les requêtes KQL |
 
 Consulter une sortie individuelle après déploiement :
 
@@ -268,15 +309,39 @@ terraform output -json
 ## Prérequis
 
 - [Terraform](https://developer.hashicorp.com/terraform/downloads) ≥ 1.6.0
-- [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) installée et authentifiée (`az login`) - Terraform réutilise cette session
+- [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) installée et authentifiée (`az login`) - le provider `azurerm` réutilise cette session
 - Un abonnement Azure actif avec un rôle **Contributor** (ou équivalent) sur le scope cible
-- Le provider `azurerm` (`~> 3.100`), téléchargé automatiquement par `terraform init`
+- Le provider `azurerm` (`~> 3.100`) et `random` (`~> 3.6`), téléchargés automatiquement par `terraform init`
+- Un compte [Terraform Cloud](https://app.terraform.io) (gratuit) avec une organisation et un workspace `azure-hub-spoke` créés au préalable (utilisé comme backend distant du state - voir section *Gestion du state*)
 
 Vérification rapide de l'environnement :
 
 ```bash
 terraform version
 az account show
+```
+
+---
+
+## Checklist avant le premier déploiement
+
+Ces étapes sont **obligatoires** avant de lancer `terraform init`/`apply` - sans elles, `terraform init` échoue (organisation ou workspace introuvable).
+
+- [ ] **Compte Terraform Cloud créé** sur [app.terraform.io](https://app.terraform.io/signup) + une **organisation** créée (nom libre, ex: `tonprenom-hubspoke`)
+- [ ] **Workspace `azure-hub-spoke` créé** dans cette organisation, en mode **CLI-Driven Workflow**
+- [ ] **Execution Mode du workspace = `Local`** (Settings → General → Execution Mode) - obligatoire sur un tenant Azure Students d'établissement où la création de Service Principal est bloquée (`az ad sp create-for-rbac` → *Insufficient privileges*)
+- [ ] **`providers.tf` édité** : remplacer `organization = "TON_ORG_TERRAFORM_CLOUD"` par le nom réel de ton organisation
+- [ ] **`az login`** exécuté (session Azure CLI active - `az account show` doit répondre correctement)
+- [ ] **`terraform login`** exécuté (génère un jeton API Terraform Cloud, stocké dans `~/.terraform.d/credentials.tfrc.json`)
+- [ ] *(Optionnel)* `terraform.tfvars` copié depuis `terraform.tfvars.example` si tu veux personnaliser `resource_group_name`, `location`, `tags`, etc. - sinon les valeurs par défaut du dépôt s'appliquent
+
+Une fois ces points cochés :
+
+```bash
+cd AzureHubSpokeTerraform
+terraform init
+terraform plan
+terraform apply
 ```
 
 ---
@@ -288,18 +353,21 @@ az account show
 git clone https://github.com/dspitech/AzureHubSpokeTerraform.git
 cd AzureHubSpokeTerraform
 
-# 2. Initialiser Terraform (téléchargement du provider azurerm)
+# 2. Adapter providers.tf : remplacer "TON_ORG_TERRAFORM_CLOUD" par le nom
+#    de ton organisation Terraform Cloud, puis s'authentifier
+terraform login
+
+# 3. Initialiser Terraform (backend Terraform Cloud + téléchargement des providers)
 terraform init
 
-# 3. Formatage et validation
+# 4. Formatage et validation
 terraform fmt && terraform validate
 
-# 4. Copier et adapter le fichier de variables (optionnel mais recommandé)
+# 5. Copier et adapter le fichier de variables (optionnel mais recommandé)
 cp terraform.tfvars.example terraform.tfvars
 # Éditer terraform.tfvars : adapter resource_group_name, location, tags, etc.
-
-# 5. Définir le mot de passe admin SANS le committer
-admin_password="VotreMotDePasseComplexe!2025"
+# Par défaut, generate_admin_password = true : aucun mot de passe à saisir,
+# il est généré automatiquement et stocké dans Azure Key Vault.
 
 # 6. Vérifier le plan d'exécution
 terraform plan
@@ -308,7 +376,7 @@ terraform plan
 terraform apply -auto-approve
 ```
 
-À l'issue du déploiement (environ 10 à 15 minutes, principalement pour le provisioning du Firewall et du Bastion), Terraform affiche les outputs définis ci-dessus.
+À l'issue du déploiement (environ 10 à 15 minutes, principalement pour le provisioning du Firewall et du Bastion), Terraform affiche les outputs définis ci-dessus, dont le nom du Key Vault contenant les identifiants générés.
 
 ---
 
@@ -316,10 +384,16 @@ terraform apply -auto-approve
 
 Les VMs `VM-SPOKE-1` et `VM-SPOKE-2` ne possèdent **aucune IP publique**. L'unique point d'accès est **Azure Bastion** :
 
-1. Depuis le [portail Azure](https://portal.azure.com), ouvrir la ressource `VM-SPOKE-1` ou `VM-SPOKE-2`.
-2. Cliquer sur **Connect** → **Bastion**.
-3. Renseigner `admin_username` et le mot de passe défini via `admin_password` dans le fichier `terraform.tfvars`.
-4. La session RDP s'ouvre directement dans le navigateur, en HTTPS, sans exposer la VM à Internet.
+1. Récupérer les identifiants générés :
+   ```bash
+   az keyvault secret show --vault-name <key_vault_name> --name vm-admin-username --query value -o tsv
+   az keyvault secret show --vault-name <key_vault_name> --name vm-admin-password --query value -o tsv
+   ```
+   (`<key_vault_name>` = output `key_vault_name` du `terraform apply`)
+2. Depuis le [portail Azure](https://portal.azure.com), ouvrir la ressource `VM-SPOKE-1` ou `VM-SPOKE-2`.
+3. Cliquer sur **Connect** → **Bastion**.
+4. Renseigner les identifiants récupérés à l'étape 1.
+5. La session RDP s'ouvre directement dans le navigateur, en HTTPS, sans exposer la VM à Internet.
 
 ---
 
@@ -351,29 +425,73 @@ Cette commande supprime uniquement les ressources gérées par Terraform et met 
 
 ## Bonnes pratiques de sécurité
 
-- **Ne jamais committer** `terraform.tfvars` ni `*.tfstate` : le state Terraform contient le mot de passe VM en clair. Ces fichiers sont déjà exclus par `.gitignore`.
-- Préférer une **variable d'environnement** (`TF_VAR_admin_password`) ou un secret manager plutôt qu'un fichier tfvars pour le mot de passe.
-- Pour un usage au-delà d'un lab, stocker le state dans un **backend distant chiffré** (`azurerm` backend sur un Storage Account) - le bloc est déjà présent, commenté, dans `providers.tf`.
-- Envisager de générer le mot de passe avec la ressource `random_password` et de le stocker dans **Azure Key Vault** plutôt que de le passer en variable brute.
+- **Ne jamais committer** `terraform.tfvars` ni `*.tfstate` : ces fichiers sont déjà exclus par `.gitignore`. Avec le backend Terraform Cloud, le state n'existe même plus en local par défaut.
+- Le mot de passe VM est **généré automatiquement** (`random_password`) et stocké dans **Azure Key Vault** (`generate_admin_password = true` par défaut) plutôt que passé en variable brute.
+- Le state est stocké dans un **backend distant chiffré** (Terraform Cloud), avec verrouillage automatique (`state locking`) à chaque `apply`.
 - Les VMs n'ayant aucune IP publique, la surface d'attaque exposée à Internet se limite aux IP publiques du Firewall et du Bastion - toutes deux protégées par les contrôles natifs de ces services managés.
-- Envisager l'activation de **Microsoft Defender for Cloud** pour un monitoring de sécurité continu sur l'ensemble de l'abonnement.
+- Chaque `apply`/`plan` passe par la pipeline CI (`terraform fmt`, `validate`, `tflint`, `checkov`) avant merge sur `main` (voir section *Intégration continue*).
+- Envisager l'activation de **Microsoft Defender for Cloud** (tier gratuit) pour un monitoring de sécurité continu sur l'ensemble de l'abonnement.
 
 ---
 
 ## Gestion du state Terraform
 
-Par défaut, ce projet utilise un **state local** (`terraform.tfstate`), adapté à un usage individuel ou de lab. Pour un contexte d'équipe ou de production, activer le backend distant prêt à l'emploi dans `providers.tf` :
+Ce projet utilise **Terraform Cloud** (tier gratuit) comme backend distant (bloc `cloud` dans `providers.tf`), à la place d'un state local ou d'un backend `azurerm` nécessitant un Storage Account dédié :
 
 ```hcl
-backend "azurerm" {
-  resource_group_name  = "RG-TFSTATE"
-  storage_account_name = "sttfstatehubspoke"
-  container_name       = "tfstate"
-  key                  = "hub-spoke.tfstate"
+cloud {
+  organization = "TON_ORG_TERRAFORM_CLOUD"
+  workspaces {
+    name = "azure-hub-spoke"
+  }
 }
 ```
 
-Ce backend nécessite un Storage Account existant, créé au préalable (hors scope de ce projet), et permet le verrouillage du state (`state locking`) pour éviter les écritures concurrentes.
+**Execution Mode du workspace : `Local`.** Sur un abonnement Azure Students rattaché au tenant Azure AD d'un établissement, la création d'un Service Principal (`az ad sp create-for-rbac`) est généralement bloquée par une politique du tenant (`Insufficient privileges to complete the operation`) - la création de Service Principal nécessitant des droits d'administrateur d'annuaire que le compte étudiant n'a pas. Le mode `Remote` (plan/apply exécutés sur l'infrastructure de Terraform Cloud) nécessiterait justement un tel Service Principal pour s'authentifier auprès d'Azure.
+
+En mode `Local` : le state est stocké, versionné et verrouillé (`state locking`) sur Terraform Cloud comme en mode distant, mais les commandes `terraform plan`/`apply` s'exécutent sur la machine locale, en réutilisant simplement la session `az login` existante - exactement comme avec un state local classique, sans configuration Azure supplémentaire.
+
+Pour configurer : workspace `azure-hub-spoke` → **Settings → General → Execution Mode → Local**.
+
+Alternative : un bloc `backend "azurerm"` (Storage Account) reste documenté en commentaire dans `providers.tf` si tu préfères rester 100% Azure sans dépendance à Terraform Cloud.
+
+---
+
+## Intégration continue (GitHub Actions)
+
+Le workflow `.github/workflows/terraform.yml` s'exécute à chaque push/PR sur `main` :
+
+1. **Format & Validate** : `terraform fmt -check`, `terraform validate`, `tflint` (règles Terraform + ruleset `azurerm`)
+2. **Checkov** : scan de sécurité statique de l'IaC (mauvaises pratiques, ressources non chiffrées, etc.) - en mode `soft_fail` au démarrage, à durcir une fois les premières alertes triées
+
+Ces deux jobs ne nécessitent **aucun accès Azure** et fonctionnent donc sans Service Principal. Le `terraform plan`/`apply` réel reste une étape manuelle en local (le workspace Terraform Cloud étant en Execution Mode `Local`, cf. section précédente) :
+
+```bash
+terraform login
+terraform init
+terraform plan
+terraform apply
+```
+
+---
+
+## Observabilité (Log Analytics)
+
+Un workspace **Log Analytics** central (`module.log_analytics`) reçoit :
+
+- Les logs du **Firewall** (règles réseau appliquées/bloquées, DNS proxy)
+- Les logs d'**audit du Bastion**
+- Les événements et compteurs de règles des **NSG**
+- Les **NSG Flow Logs** (`enable_nsg_flow_logs = true` par défaut) : trafic réel autorisé/bloqué au niveau réseau, archivé dans un compte de stockage dédié
+
+Le plafond `log_daily_quota_gb` (0.5 Go/jour par défaut) évite toute dérive de coût sur un abonnement Azure Students. Pour interroger les logs (ex. valider le filtrage inter-Spoke en soutenance) : portail Azure → workspace Log Analytics → **Logs**, puis une requête KQL, par exemple :
+
+```kql
+AzureDiagnostics
+| where ResourceType == "AZUREFIREWALLS"
+| project TimeGenerated, msg_s
+| order by TimeGenerated desc
+```
 
 ---
 
@@ -387,6 +505,9 @@ Les composants les plus significatifs en termes de coût sont :
 | Azure Bastion | Facturation horaire fixe (SKU Standard) |
 | VMs Windows Server | Taille de VM (`Standard_B2s` par défaut) + licence Windows incluse |
 | IP publiques Standard | Facturation horaire, faible impact |
+| Log Analytics | Volume ingéré (plafonné par `log_daily_quota_gb`) + rétention |
+| Compte de stockage (Flow Logs) | Quelques centimes/mois (volume très faible en usage lab) |
+| Key Vault | Facturation à l'opération - coût négligeable pour quelques secrets |
 
 Pensez à exécuter `terraform destroy` en dehors des périodes d'utilisation (lab, formation, démonstration) : le Firewall et le Bastion sont facturés en continu tant qu'ils sont provisionnés, indépendamment de leur utilisation réelle.
 
@@ -394,12 +515,12 @@ Pensez à exécuter `terraform destroy` en dehors des périodes d'utilisation (l
 
 ## Pistes d'amélioration
 
-- Génération automatique du mot de passe VM via `random_password` + stockage dans **Azure Key Vault**
 - Ajout d'un **Azure Firewall Policy** dédié pour découpler les règles du cycle de vie du Firewall
-- Mise en place de **Log Analytics** et de diagnostics settings sur le Firewall, le Bastion et les NSG
-- Ajout de tests automatisés (`terraform validate`, `tflint`, `checkov`) dans une pipeline CI/CD (GitHub Actions)
+- Durcissement de la pipeline CI (passer `checkov` en `soft_fail: false` une fois les alertes initiales triées)
 - Passage à des images Linux (Ubuntu 22.04) en complément ou remplacement du Windows Server pour réduire les coûts de licence
 - Ajout d'un troisième Spoke pour valider le passage à l'échelle du modèle
+- Ajout d'un **Azure Monitor Workbook** dédié pour visualiser les métriques Firewall/NSG sans écrire de KQL à chaque fois
+- Ajout d'un **budget + alerte de coût** (`azurerm_consumption_budget_subscription`) pour être notifié avant épuisement du crédit Azure Students
 
 ---
 

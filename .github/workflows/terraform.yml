@@ -1,0 +1,75 @@
+name: Terraform CI
+
+# Pipeline de vérification IaC :
+#   1. Formatage & validation syntaxique
+#   2. Lint approfondi (tflint) + scan de sécurité (checkov)
+#
+# Le workspace Terraform Cloud est configuré en Execution Mode = "Local"
+# (comptes Azure Students liés à un tenant d'établissement : la création
+# d'un Service Principal pour une exécution distante est bloquée par une
+# politique du tenant - "Insufficient privileges to register application").
+# Le `plan`/`apply` réel s'exécute donc en local via `az login`, pas en CI.
+# Cette pipeline se limite donc aux vérifications statiques ne nécessitant
+# aucun accès Azure, ce qui reste la majorité de la valeur d'une CI IaC.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: AzureHubSpokeTerraform
+
+jobs:
+  lint:
+    name: Format & Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
+
+      - name: Terraform fmt (vérification du style)
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init (sans backend, validation locale uniquement)
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+
+      - name: Run TFLint
+        run: |
+          tflint --init
+          tflint --recursive
+
+  security-scan:
+    name: Checkov (scan de sécurité IaC)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: AzureHubSpokeTerraform
+          framework: terraform
+          quiet: true
+          soft_fail: true # passer en "false" une fois les premières alertes triées, pour bloquer la PR
+
+  # Rappel : terraform plan / apply s'exécutent en local (workspace en Execution Mode = Local) :
+  #   terraform login && terraform init && terraform plan && terraform apply

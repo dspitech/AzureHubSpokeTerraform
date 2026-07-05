@@ -5,12 +5,21 @@ resource_group_name = "RG-HUB-SPOKE-PROJECT"
 location            = "norwayeast"
 admin_username      = "azure_admin"
 
-# Recommandé : NE PAS mettre le mot de passe ici.
-# Utiliser plutôt une variable d'environnement avant le apply :
-admin_password = "VotreMotDePasseComplexe!2025"
-# admin_password      = "A_NE_PAS_COMMITTER"
+# Recommandé (par défaut) : le mot de passe VM est généré automatiquement
+# (random_password) et stocké dans Azure Key Vault. Rien à renseigner ici.
+generate_admin_password = true
+
+# Uniquement si generate_admin_password = false :
+# admin_password = "A_NE_PAS_COMMITTER"
 
 vm_size = "Standard_B2s"
+
+# Observabilité (Log Analytics)
+log_retention_in_days = 30
+log_daily_quota_gb    = 0.5
+
+# Mettre à false si "NetworkWatcherRG" n'existe pas dans ton abonnement Azure Students
+enable_nsg_flow_logs = true
 
 tags = {
   projet      = "AZ-PRO-HUB-SPOKE-NORWAY"

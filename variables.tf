@@ -17,9 +17,16 @@ variable "admin_username" {
 }
 
 variable "admin_password" {
-  description = "Mot de passe administrateur des VMs (ne pas committer en clair - utiliser TF_VAR_admin_password ou un fichier tfvars ignoré par git)"
+  description = "Mot de passe administrateur des VMs. Utilisé uniquement si generate_admin_password = false. Sinon, ignoré : le mot de passe est généré automatiquement et stocké dans Key Vault."
   type        = string
   sensitive   = true
+  default     = null
+}
+
+variable "generate_admin_password" {
+  description = "Si true (recommandé), génère un mot de passe VM aléatoire (random_password) et le stocke dans Azure Key Vault au lieu de le passer en clair via une variable."
+  type        = bool
+  default     = true
 }
 
 variable "vm_size" {
@@ -74,4 +81,24 @@ variable "tags" {
     environment = "lab"
     gere_par    = "terraform"
   }
+}
+
+# --- Observabilité (Log Analytics + Diagnostic Settings) ---
+
+variable "log_retention_in_days" {
+  description = "Durée de rétention des logs dans Log Analytics"
+  type        = number
+  default     = 30
+}
+
+variable "log_daily_quota_gb" {
+  description = "Plafond quotidien d'ingestion de logs en Go (maîtrise du coût sur Azure Students)"
+  type        = number
+  default     = 0.5
+}
+
+variable "enable_nsg_flow_logs" {
+  description = "Active les NSG Flow Logs (nécessite Network Watcher activé sur l'abonnement + un compte de stockage dédié). Mettre à false si NetworkWatcherRG n'existe pas dans ton abonnement Students."
+  type        = bool
+  default     = true
 }
